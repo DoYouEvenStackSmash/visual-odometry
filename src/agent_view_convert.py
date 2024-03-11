@@ -32,6 +32,7 @@ max_r = raw_img.shape[0]
 a,b = raw_img.shape
 mpd = lambda r, theta : r * np.tan(theta / 2)
 
+# coordinate transform
 rect_arr = np.zeros((a,b,3))
 for i in range(a):
 	for j in range(b):
