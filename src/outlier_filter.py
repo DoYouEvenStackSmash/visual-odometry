@@ -18,7 +18,7 @@ def normalize(arx):
   #arx = (7.5 * 882.5)/arx
   val = np.max(np.max(arx))
   oval = np.min(np.min(arx))
-  arx = (arx - np.min(np.min(arx))) / (np.max(np.max(arx)) - np.min(np.min(arx))) * -1 + 1
+  arx = (arx - oval) / (val - oval) * -1 + 1
   arx = arx * (val - oval)
   return arx
 
@@ -43,15 +43,20 @@ def outlier_rejection(mean_deriv):
   #mean_deriv[mean_deriv > ub[:]] = ub[:]
   return np.clip(mean_deriv, lb[:,np.newaxis], ub[:,np.newaxis])
 
+gauss_f = get_vec_filter(get_1d_gaussian(7))
+gauss_delay = gauss_f.shape[0]
+mean_f = get_vec_filter(get_mean_filter(9))
+mean_delay = mean_f.shape[0]
+deriv_f = get_vec_filter(np.array([-1,1]))
 def find_obs(frame,lower_bound = 50, upper_bound = 350):
   conv = lambda x,h: np.apply_along_axis(lambda x: np.convolve(x, h.flatten(), mode='full'),axis=1,arr=x)
   frame = normalize(frame)
   
   # blur column
   # gaussian filter
-  gauss_f = get_vec_filter(get_1d_gaussian(7))
+  #gauss_f = get_vec_filter(get_1d_gaussian(7))
   blurred_frame = conv(frame, gauss_f)
-  gauss_delay = gauss_f.shape[0]
+  #gauss_delay = gauss_f.shape[0]
   # normalize
   #blurred_frame = (blurred_frame - np.min(np.min(blurred_frame))) / (np.max(np.max(blurred_frame)) - np.min(np.min(blurred_frame)))
   
@@ -59,14 +64,14 @@ def find_obs(frame,lower_bound = 50, upper_bound = 350):
   bounded_frame = blurred_frame[:,lower_bound:upper_bound]
   
   # get mean filter
-  mean_f = get_vec_filter(get_mean_filter(9))
-  mean_delay = mean_f.shape[0]
+  #mean_f = get_vec_filter(get_mean_filter(9))
+  #mean_delay = mean_f.shape[0]
   
   # apply mean filter
   mean_filtered_frame = conv(bounded_frame, mean_f)
   
   # get derivative filter
-  deriv_f = get_vec_filter(np.array([-1,1]))
+  #deriv_f = get_vec_filter(np.array([-1,1]))
   
   # get first derivative
   first_derivative = conv(mean_filtered_frame[:,:],deriv_f)#[:,1:-2]
@@ -80,22 +85,33 @@ def find_obs(frame,lower_bound = 50, upper_bound = 350):
   #print(first_derivative.shape)
   #first_derivative = normalize(first_derivative)
   obs_matrix = np.ones((frame.shape[0],upper_bound - lower_bound))
-  std_arr = np.std(first_derivative[:,:], axis=1)
+  #std_arr = np.std(first_derivative[:,:], axis=1)
   mean_arr = np.mean(first_derivative[:,:],axis=1)
   #print(obs_matrix.shape)
   for i in range(first_derivative.shape[0]):
     for j in range(mean_delay + gauss_delay,first_derivative.shape[1]-mean_delay - gauss_delay):
         if np.sign(first_derivative[i,j]) != np.sign(first_derivative[i,j-1]) or first_derivative[i,j] < mean_arr[i]/4:
-          obs_matrix[i,j:first_derivative.shape[1]-mean_delay - gauss_delay-1] = 0
+          #obs_matrix[i,j:first_derivative.shape[1]-mean_delay - gauss_delay-1] = 0
+          obs_matrix[i,j:-1] = 0
           break
           
   return obs_matrix#np.flip(obs_matrix,axis=1)
 
 def get_free_space(rect_arr, arm):
-  free_spaces = np.ones(arm.shape)
+  free_spaces = arm
+  posns = np.argmax(rect_arr == 0, axis=1)
+  posns[posns == 0] = rect_arr.shape[1]
+  print(posns.shape)
+  for i,p in enumerate(posns):
+    if p != rect_arr.shape[1]:
+      #free_spaces[i,50:50+p] = arm[i,50:50+p]
+      free_spaces[i,50 + p:-1] = arm[i,50 + p -1]
+  return free_spaces
+ 
   for i in range(arm.shape[0]):
-    permj = 0 
-    for j in range(arm.shape[1]):
+    permj = 0
+    free_spaces[i,0:49] = arm[i,0:49] 
+    for j in range(50,arm.shape[1]):
       if j < 50:
         free_spaces[i,j] = arm[i,j]
       elif j > 349:
@@ -109,7 +125,12 @@ def get_free_space(rect_arr, arm):
           free_spaces[i,j:-1] = arm[i,permj]
           break
   return free_spaces
-        
+
+def get_markers(rect_arr):
+  # markers = np.zeros((rect_arr.shape[1],1))
+  markers = np.argmax(rect_arr[:,:] == 0,axis=1)
+  return markers
+  
         
       
   
