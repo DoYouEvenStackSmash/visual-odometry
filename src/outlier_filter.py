@@ -24,34 +24,34 @@ def normalize(arx):
 
 def outlier_rejection(mean_deriv):
   # Calculate quartiles
-  print(mean_deriv.shape)
   Q1 = np.percentile(mean_deriv[:,:], 25,axis=1)
   Q3 = np.percentile(mean_deriv[:,:],75, axis=1)
 
-  	# Calculate IQR
+  # Calculate IQR
   IQR = Q3 - Q1
-  print(IQR.shape)
-  threshold = 1.5 * IQR
+  threshold = 1.5 * IQR[:]
   lb = Q1 - threshold
   ub = Q3 + threshold
-  print(lb.shape)
   # Define threshold (commonly, 1.5 * IQR)
-  for row in range(mean_deriv.shape[0]):
-    for col in range(mean_deriv.shape[1]):
-      mean_deriv[row,col] = lb[row] if mean_deriv[row,col] < lb[row] else mean_deriv[row,col]
-      mean_deriv[row,col] = ub[row] if mean_deriv[row,col] > ub[row] else mean_deriv[row,col]
+  #for row in range(mean_deriv.shape[0]):
+  #  mean_deriv[row,:] = lb[row] if mean_deriv[row,:] < lb[row] else mean_deriv[row,:]
+  #  mean_deriv[row,:] = ub[row] if mean_deriv[row,:] > ub[row] else mean_deriv[row,:]
+    #for col in range(mean_deriv.shape[1]):
+      #mean_deriv[row,col] = lb[row] if mean_deriv[row,col] < lb[row] else mean_deriv[row,col]
+      #mean_deriv[row,col] = ub[row] if mean_deriv[row,col] > ub[row] else mean_deriv[row,col]
   #mean_deriv[mean_deriv < lb[:]] = lb[:]
   #mean_deriv[mean_deriv > ub[:]] = ub[:]
-  return mean_deriv#np.clip(mean_deriv, lb[np.newaxis,:], ub[np.newaxis,:])
+  return np.clip(mean_deriv, lb[:,np.newaxis], ub[:,np.newaxis])
 
 def find_obs(frame,lower_bound = 50, upper_bound = 350):
   conv = lambda x,h: np.apply_along_axis(lambda x: np.convolve(x, h.flatten(), mode='full'),axis=1,arr=x)
   frame = normalize(frame)
+  
   # blur column
   # gaussian filter
-  gauss_f = get_vec_filter(get_1d_gaussian(5))
+  gauss_f = get_vec_filter(get_1d_gaussian(7))
   blurred_frame = conv(frame, gauss_f)
-  
+  gauss_delay = gauss_f.shape[0]
   # normalize
   #blurred_frame = (blurred_frame - np.min(np.min(blurred_frame))) / (np.max(np.max(blurred_frame)) - np.min(np.min(blurred_frame)))
   
@@ -84,16 +84,15 @@ def find_obs(frame,lower_bound = 50, upper_bound = 350):
   mean_arr = np.mean(first_derivative[:,:],axis=1)
   #print(obs_matrix.shape)
   for i in range(first_derivative.shape[0]):
-    for j in range(mean_delay + 5,first_derivative.shape[1]-mean_delay - 5):
+    for j in range(mean_delay + gauss_delay,first_derivative.shape[1]-mean_delay - gauss_delay):
         if np.sign(first_derivative[i,j]) != np.sign(first_derivative[i,j-1]) or first_derivative[i,j] < mean_arr[i]/4:
-          obs_matrix[i,j] = 0
-          
+          obs_matrix[i,j:first_derivative.shape[1]-mean_delay - gauss_delay-1] = 0
+          break
           
   return obs_matrix#np.flip(obs_matrix,axis=1)
 
 def get_free_space(rect_arr, arm):
   free_spaces = np.ones(arm.shape)
-  print(arm.shape)
   for i in range(arm.shape[0]):
     permj = 0 
     for j in range(arm.shape[1]):
@@ -107,7 +106,8 @@ def get_free_space(rect_arr, arm):
         else:
           if permj == 0:
             permj = j - 1
-          free_spaces[i,j] = arm[i,permj]
+          free_spaces[i,j:-1] = arm[i,permj]
+          break
   return free_spaces
         
         
