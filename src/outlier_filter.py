@@ -46,7 +46,7 @@ def outlier_rejection(mean_deriv):
 	return np.clip(mean_deriv, lb[:,np.newaxis], ub[:,np.newaxis])
 
 # the filters
-gauss_f = get_vec_filter(get_1d_gaussian(7))
+gauss_f = get_vec_filter(get_1d_gaussian(5))
 gauss_delay = gauss_f.shape[0]
 mean_f = get_vec_filter(get_mean_filter(9))
 mean_delay = mean_f.shape[0]
@@ -86,9 +86,9 @@ def find_obs(frame,lower_bound = 50, upper_bound = 350):
 	for i in range(first_derivative.shape[0]):
 		# trim convolution heads and tails, shift obstacles by filter sizes
 		for j in range(filter_padding,first_derivative.shape[1]-filter_padding):
-				if np.sign(first_derivative[i,j]) != np.sign(first_derivative[i,j-1]) or first_derivative[i,j] < mean_arr[i]/4:
-					obs_matrix[i,j:-1] = 0
-					break
+			if np.sign(first_derivative[i,j]) != np.sign(first_derivative[i,j-1]) or first_derivative[i,j] < mean_arr[i]/4:
+				obs_matrix[i,j:-1] = 0
+				break
 					
 	return obs_matrix
 
@@ -103,6 +103,13 @@ def get_free_space(rect_arr, frame):
 		if p != rect_arr.shape[1]:
 			free_spaces[i,50 + p:-1] = frame[i,50 + p -1]
 	return free_spaces
+
+def get_markers(rect_arr):
+	"""
+	Get obstacle in every column if it exists
+	"""
+	markers = np.argmax(rect_arr[:,:] == 0,axis=1)
+	return markers
 
 def _get_free_space(rect_arr, arm):
 	free_spaces = np.zeros(arm.shape)
@@ -123,13 +130,7 @@ def _get_free_space(rect_arr, arm):
 					break
 	return free_spaces
 
-def get_markers(rect_arr):
-	"""
-	Get obstacle in every column if it exists
-	"""
-	markers = np.argmax(rect_arr[:,:] == 0,axis=1)
-	return markers
-	
+
 				
 			
 	
