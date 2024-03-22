@@ -47,74 +47,61 @@ stereo.disparity.link(xoutDepth.input)
 #ll.out.link(xoutLeft.input)
 #rr.out.link(xoutRight.input)
 
-# create preview windos
+def scatterplot(image_shape, points, radius=3, color=(255, 255, 255)):
+	# Create a blank image
+	scatter_image = np.zeros(image_shape, dtype=np.uint8)
+	# Draw circles for each point
+	scale = np.max(points)
+	scale_factor = image_shape[0] / scale
+	
+	for i,point in enumerate(points):
+		#print(point)
+		cv2.circle(scatter_image, (i,image_shape[0] - int(point[0]*scale_factor)), radius, color, -1)
+	return scatter_image
+
 cv2.startWindowThread()
-cv2.namedWindow("preview")
-#import skimage
-narr = [np.zeros((400,640))+10000]
-rarr = [np.zeros((400,640))+10000]
-#frames = []
+cv2.namedWindow("scatter")
+cv2.startWindowThread()
+cv2.namedWindow("raw")
+val = np.zeros((400,640))+10000
+narr = [val]
+
+frames = []
 from skimage import feature
 with dai.Device(pp) as device:
 	qdepth = device.getOutputQueue(name="depth",maxSize=30,blocking=False)
 	c = 0
 	num = 882.5 * 7.5	# focal point * baseline for OAK-D
-	norm = lambda depthFrame: depthFrame#(depthFrame - np.min(np.min(depthFrame))) / (np.max(np.max(depthFrame)) - np.min(np.min(depthFrame)))
 	while True:
 		# nonblocking try to get frames
 		depthFrame = qdepth.tryGet()
 		if depthFrame != None:
 			depthFrame = depthFrame.getFrame()
-			#narr[-1] = np.minimum(norm(depthFrame),narr[-1]) 
-			#narr.append(depthFrame)
+
 			depthFrame+=1
-			#print(np.min(depthFrame))
-			depthFrame =  num / depthFrame
-			#frames.append(depthFrame)
-			if c > 5:
-				narr[-1] = np.minimum((norm(depthFrame)),narr[-1])
-				#frames.append(norm(depthFrame))
-				#cv2.imshow("preview",np.flip(narr[-1].T,axis=1)*10)
-				#cv2.waitKey(1)
-			if True and not c%6:
-				flipf = np.flip(narr[-1].T,axis=1)
-				# print(flipf.shape)
-				rect_arr = find_obs(flipf)
-				obs = get_free_space(rect_arr, flipf)
-				narr[-1] = np.minimum(narr[-1],np.flip(obs,axis=1).T)
-				#narr[-1] = norm(varr)
-				#narr[-1] = cv2.bilateralFilter(narr[-1].astype(np.float32), d=9, sigmaColor=30,sigmaSpace=30)
-				#edges = (edges - np.mean(edges)) * -1 + np.mean(edges)
-				#print(narr[-1])
-				cv2.imshow("preview",narr[-1]/1000)
-				cv2.waitKey(1)
-			if True and not c%6:
-				#c = 0
-				narr = [norm(np.zeros((400,640))+10000)]
-				rarr = [np.ones((400,640))+10000]
-			if False and c > 50:		
-				np.save("noise.npy", np.array(frames))
-				exit()
-			print(c)
-			#depthFrame = (depthFrame - np.min(depthFrame)) / (np.max(depthFrame) - np.min(depthFrame))
-			print(np.max(depthFrame.astype(np.float32)))
-			#depthFrame[depthFrame<0.4] = 0.01
-			#depthFrame = np.exp(-depthFrame*2)
-			if False and c < 100 and not c % 20:			
-				narr[-1] = cv2.bilateralFilter(narr[-1].astype(np.float32), d=9, sigmaColor=30,sigmaSpace=30)
-			#plt.histogram(depthFrame)
-			#plt.show()
-			#cv2.imshow("preview",narr[-1]*11)
-			
-			#cv2.waitKey(1)
-			c+=1
-			if False and c > 200:
-				#narr[-1] = cv2.bilateralFilter(narr[-1].astype(np.float32), d=9, sigmaColor=75,sigmaSpace=75)
-				p = np.linspace(0,640,640)
-				#plt.hist(narr[-1])
-				#plt.hist(narr[-1][190:210,:]*40)
-				#plt.show()
-				np.save("frames.npy", narr[-1])
-				exit()
+			depthFrame =	num / depthFrame
+
+			if c > 1:
+				narr[-1] = np.minimum(depthFrame,narr[-1])
+
+			if True and not c % 25: # integrate over 25 frames
 				
-		#print(c)
+				flipf = np.flip(narr[-1].T,axis=1)
+				rect_arr = find_obs(flipf)
+				
+				# optional debugging
+				obs = get_free_space(rect_arr, flipf)
+		
+				# "lidar"
+				markers = get_markers(rect_arr)
+				markers = flipf[np.arange(markers.shape[0]),markers.flatten()+50]
+				
+				# optional debugging
+				narr[-1] = np.minimum(narr[-1],np.flip(obs,axis=1).T)
+				cv2.imshow("raw",cv2.hconcat([depthFrame/1000,narr[-1]/1000]))
+				cv2.imshow("scatter",scatterplot(narr[-1].shape, markers[:,np.newaxis]))
+				cv2.waitKey(1)
+			if True and not c%25:
+				narr = [val]
+			
+			c+=1
