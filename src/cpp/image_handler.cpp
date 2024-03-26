@@ -31,6 +31,8 @@ cv::Mat eig2mat(const Eigen::MatrixXd &eig) {
 
 
 void stat_image(cv::Mat &image) {
+  cv::flip(image, image, 1);
+  image = image.t();
   int rows = image.rows;
   int cols = image.cols;
   int channels = image.channels();

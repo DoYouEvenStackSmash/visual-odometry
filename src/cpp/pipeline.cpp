@@ -35,7 +35,6 @@ int main(int argc, char** argv) {
   std::vector<double> gaussianKernel = generateGaussianKernel(gauss_delay, sigma);
   std::vector<double> meanKernel = generateMeanKernel(mean_delay);
   std::vector<double> derivativeKernel = generateDerivativeKernel(n);
-  std::vector<double> lpf = {0,0,0,0,1,1,1,1,1,0,0,0,0};
   std::vector<std::vector<double>> pipeline = {gaussianKernel, meanKernel, derivativeKernel};
   std::vector<std::string> pipeline_names = {"gaussian","mean","derivative"};
   Eigen::MatrixXd val = imgMatrix;
@@ -47,7 +46,7 @@ int main(int argc, char** argv) {
   
   std::cout << "Normalizing" << std::endl;
   normalize(val);
-  m = eig2mat(val.array()*100);
+  m = eig2mat(val*10);
   stat_image(m);
 
   // val = conv(val,lpf);
@@ -57,7 +56,7 @@ int main(int argc, char** argv) {
 
   std::cout << pipeline_names[0] << std::endl;
   val = conv(val, pipeline[0]);
-  m = eig2mat(val.array()*100);
+  m = eig2mat(val*10);
   stat_image(m);
 
   std::cout <<"blocking" << std::endl;
@@ -66,23 +65,26 @@ int main(int argc, char** argv) {
   int window = 300;
   Eigen::MatrixXd win_val = val.block(0,lb,val.rows(),window);
   //normalize(win_val);
-  m = eig2mat(win_val);
+  m = eig2mat(win_val*10);
   stat_image(m);
 
   std::cout << pipeline_names[1] << std::endl;
-  win_val = conv(win_val, pipeline[1]);
-  m = eig2mat(win_val);
+  Eigen::MatrixXd nwin_val = win_val.rowwise().reverse();
+  nwin_val = conv(nwin_val, pipeline[1]);
+  win_val = nwin_val.rowwise().reverse();
+
+  m = eig2mat(win_val*10);
   stat_image(m);
 
   // stat_image(m);
   std::cout << pipeline_names[2] << std::endl;
   win_val = conv(win_val, pipeline[2]);
-  m = eig2mat(win_val*100);
+  m = eig2mat(win_val*10);
   stat_image(m);
 
   std::cout << "rejecting outliers" << std::endl;
   outlier_rejection(win_val);
-  m = eig2mat(win_val);
+  m = eig2mat(win_val*100);
   stat_image(m);
 
   //normalize(win_val);
@@ -94,14 +96,14 @@ int main(int argc, char** argv) {
   obstacles = obstacles.array() + 1;
   Eigen::VectorXd row_means(win_val.rows(),1);
   row_means = win_val.rowwise().mean();
-  std::cout << row_means << std::endl;
-  int filter_padding = lb;
+  //std::cout << row_means << std::endl;
+  int filter_padding = mean_delay + gauss_delay;
   for (int i = 0; i < win_val.rows(); ++i) {
-    for (int j = filter_padding; j < window-lb; ++j) {
+    for (int j = filter_padding; j < window; ++j) {
       // std::cout << win_val(i,j) << std::endl;
       if ((sign(win_val(i,j)) != sign(win_val(i,j-1)))){//} or (abs(win_val(i,j)) < abs(row_means(i)))) {
 
-        for (int k = j; k < obstacles.cols(); ++k) {
+        for (int k = j-filter_padding; k < obstacles.cols(); ++k) {
           obstacles(i,k) = 0;
         }
         break;
@@ -118,7 +120,7 @@ int main(int argc, char** argv) {
   for (int i = 0; i < obstacles.rows(); ++i) {
     for (int j =0; j < obstacles.cols(); ++j) {
       if (obstacles(i,j) != 1) {
-        posns[i] = j-1;
+        posns[i] = j;
         break;
       }
     }
@@ -137,9 +139,22 @@ int main(int argc, char** argv) {
         endval(i,j) = imgMatrix(i,j);
     }
   }
-  //normalize(endval);
+  std::cout << "OBstacles" << std::endl;
+  // normalize(endval);
   m = eig2mat(endval.array()*50);
   stat_image(m);
+
+  cv::Size imageSize(400,640);
+  cv::Mat img(imageSize,CV_8UC3,cv::Scalar(0,0,0));
+  cv::Scalar circleColor(0,0,255);
+  for (int i = 0; i < posns.size(); i++) {
+    if (posns[i] < window)
+      cv::circle(img, cv::Point(endval(i,lb + posns[i]),i),3,circleColor,-1);
+  }
+  cv::flip(img, img, 1);
+  // img = img.t();
+  stat_image(img);
+
 
   return 0;
 }
